@@ -1,6 +1,7 @@
 package com.example.donorlk.controllers
 
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
@@ -31,15 +32,17 @@ class LoginController : BaseActivity() {
     private lateinit var auth: FirebaseAuth
     private lateinit var credentialManager: CredentialManager
     private lateinit var firestore: FirebaseFirestore
+    private lateinit var sharedPreferences: SharedPreferences
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_login)
 
-        // Initialize Firebase Auth, Firestore and Credential Manager
+        // Initialize Firebase Auth, Firestore, Credential Manager and SharedPreferences
         auth = FirebaseAuth.getInstance()
         firestore = FirebaseFirestore.getInstance()
         credentialManager = CredentialManager.create(this)
+        sharedPreferences = getSharedPreferences("DONORlk_prefs", MODE_PRIVATE)
 
         // Initialize views
         initializeViews()
@@ -119,6 +122,9 @@ class LoginController : BaseActivity() {
                 if (document.exists()) {
                     val user = document.toObject(User::class.java)
                     val role = user?.role?.lowercase() ?: "donator"
+
+                    // Save login state
+                    saveLoginState(true, role)
                     redirectBasedOnRole(role)
                 } else {
                     // User doc doesn't exist, create one with default donator role
@@ -133,10 +139,14 @@ class LoginController : BaseActivity() {
                         firestore.collection("users").document(currentUser.uid)
                             .set(newUser)
                             .addOnSuccessListener {
+                                // Save login state
+                                saveLoginState(true, newUser.role)
                                 redirectBasedOnRole(newUser.role)
                             }
                             .addOnFailureListener { e ->
                                 Log.w("Firestore", "Error creating user document", e)
+                                // Save login state with default role
+                                saveLoginState(true, "donator")
                                 redirectBasedOnRole("donator")
                             }
                     }
@@ -145,6 +155,8 @@ class LoginController : BaseActivity() {
             .addOnFailureListener { e ->
                 Log.w("Firestore", "Error getting user document", e)
                 Toast.makeText(this, "Error retrieving user data", Toast.LENGTH_SHORT).show()
+                // Save login state with default role
+                saveLoginState(true, "donator")
                 redirectBasedOnRole("donator")
             }
     }
@@ -293,5 +305,14 @@ class LoginController : BaseActivity() {
                 finish()
             }
         }
+    }
+
+    private fun saveLoginState(isLoggedIn: Boolean, userRole: String) {
+        sharedPreferences.edit().apply {
+            putBoolean("is_logged_in", isLoggedIn)
+            putString("user_role", userRole)
+            apply()
+        }
+        Log.d("LoginController", "Login state saved: $isLoggedIn, role: $userRole")
     }
 }

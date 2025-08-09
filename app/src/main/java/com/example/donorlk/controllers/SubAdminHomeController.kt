@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import com.example.donorlk.CreateOperatorsActivity
 import com.example.donorlk.R
+import com.example.donorlk.utils.LoginManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
@@ -22,14 +23,16 @@ class SubAdminHomeController : AppCompatActivity() {
     private lateinit var deleteOperatorCard: CardView
     private lateinit var welcomeText: TextView
     private lateinit var logoutContainer: LinearLayout
+    private lateinit var loginManager: LoginManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_sub_admin_home_page)
 
-        // Initialize Firebase
-        db = FirebaseFirestore.getInstance()
+        // Initialize Firebase Auth, Firestore and LoginManager
         auth = FirebaseAuth.getInstance()
+        db = FirebaseFirestore.getInstance()
+        loginManager = LoginManager(this)
 
         // Initialize views
         initializeViews()
@@ -125,16 +128,14 @@ class SubAdminHomeController : AppCompatActivity() {
 
     private fun performLogout() {
         try {
-            // Sign out from Firebase Auth
-            auth.signOut()
+            // Use LoginManager for complete logout
+            loginManager.performLogout()
 
             // Show logout success message
             Toast.makeText(this, "Logged out successfully", Toast.LENGTH_SHORT).show()
 
-            // Navigate to login screen
-            val intent = Intent(this, LoginController::class.java)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            startActivity(intent)
+            // Navigate to login screen using LoginManager
+            loginManager.navigateToLogin()
             finish()
 
         } catch (e: Exception) {
