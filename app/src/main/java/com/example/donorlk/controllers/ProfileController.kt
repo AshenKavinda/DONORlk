@@ -16,6 +16,8 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.donorlk.R
 import com.example.donorlk.models.User
+import com.example.donorlk.database.ProfileDatabaseHelper
+import com.example.donorlk.utils.NetworkUtils
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import java.io.File
@@ -38,6 +40,7 @@ class ProfileController : BaseActivity() {
 
     private lateinit var auth: FirebaseAuth
     private lateinit var firestore: FirebaseFirestore
+    private lateinit var databaseHelper: ProfileDatabaseHelper
 
     private var currentUser: User? = null
     private val imageFileName = "profile_image.png"
@@ -63,6 +66,7 @@ class ProfileController : BaseActivity() {
 
         auth = FirebaseAuth.getInstance()
         firestore = FirebaseFirestore.getInstance()
+        databaseHelper = ProfileDatabaseHelper(this)
 
         initializeViews()
         setupSpinners()
@@ -280,26 +284,54 @@ class ProfileController : BaseActivity() {
         nextButton.isEnabled = false
         nextButton.text = "Loading..."
 
-        firestore.collection("users").document(currentFirebaseUser.uid)
-            .get()
-            .addOnSuccessListener { document ->
-                if (document.exists()) {
-                    currentUser = document.toObject(User::class.java)
-                    currentUser?.let { user ->
-                        populateFields(user)
+        // First try to load from local database
+        val localUser = databaseHelper.getProfile(currentFirebaseUser.uid)
+        if (localUser != null) {
+            currentUser = localUser
+            populateFields(localUser)
+            nextButton.isEnabled = true
+            nextButton.text = "Save"
+        }
+
+        // If network is available, try to sync with Firebase
+        if (NetworkUtils.isNetworkAvailable(this)) {
+            firestore.collection("users").document(currentFirebaseUser.uid)
+                .get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        val firebaseUser = document.toObject(User::class.java)
+                        firebaseUser?.let { user ->
+                            currentUser = user
+                            populateFields(user)
+                            // Save to local database
+                            databaseHelper.saveProfile(user, true)
+                        }
+                    } else if (localUser == null) {
+                        Toast.makeText(this, "User profile not found", Toast.LENGTH_SHORT).show()
                     }
-                } else {
-                    Toast.makeText(this, "User profile not found", Toast.LENGTH_SHORT).show()
+                    nextButton.isEnabled = true
+                    nextButton.text = "Save"
                 }
-                nextButton.isEnabled = true
-                nextButton.text = "Save"
+                .addOnFailureListener { e ->
+                    Log.w("ProfileController", "Error loading profile from Firebase", e)
+                    if (localUser == null) {
+                        Toast.makeText(this, "Failed to load profile. No offline data available.", Toast.LENGTH_LONG).show()
+                    } else {
+                        Toast.makeText(this, "Using offline data. Will sync when online.", Toast.LENGTH_SHORT).show()
+                    }
+                    nextButton.isEnabled = true
+                    nextButton.text = "Save"
+                }
+        } else {
+            // Offline mode
+            if (localUser == null) {
+                Toast.makeText(this, "No offline profile data available", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Offline mode - Using cached data", Toast.LENGTH_SHORT).show()
             }
-            .addOnFailureListener { e ->
-                Log.w("ProfileController", "Error loading profile", e)
-                Toast.makeText(this, "Failed to load profile: ${e.message}", Toast.LENGTH_LONG).show()
-                nextButton.isEnabled = true
-                nextButton.text = "Save"
-            }
+            nextButton.isEnabled = true
+            nextButton.text = "Save"
+        }
     }
 
     private fun populateFields(user: User) {
@@ -434,18 +466,65 @@ class ProfileController : BaseActivity() {
             createdAt = System.currentTimeMillis()
         )
 
-        firestore.collection("users").document(currentFirebaseUser.uid)
-            .set(updatedUser)
-            .addOnSuccessListener {
+        // Always save to local database first
+        val localSaveSuccess = databaseHelper.saveProfile(updatedUser, false)
+
+        if (NetworkUtils.isNetworkAvailable(this)) {
+            // Online: Try to sync with Firebase
+            firestore.collection("users").document(currentFirebaseUser.uid)
+                .set(updatedUser)
+                .addOnSuccessListener {
+                    // Mark as synced in local database
+                    databaseHelper.markAsSynced(currentFirebaseUser.uid)
+                    currentUser = updatedUser
+                    nextButton.isEnabled = true
+                    nextButton.text = "Save"
+                    Toast.makeText(this, "Profile updated and synced successfully!", Toast.LENGTH_SHORT).show()
+                }
+                .addOnFailureListener { e ->
+                    Log.w("ProfileController", "Error syncing to Firebase", e)
+                    if (localSaveSuccess) {
+                        currentUser = updatedUser
+                        Toast.makeText(this, "Profile saved offline. Will sync when online.", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this, "Failed to save profile: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                    nextButton.isEnabled = true
+                    nextButton.text = "Save"
+                }
+        } else {
+            // Offline: Save locally only
+            if (localSaveSuccess) {
                 currentUser = updatedUser
-                nextButton.isEnabled = true
-                nextButton.text = "Save"
-                Toast.makeText(this, "Profile updated successfully!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Profile saved offline. Will sync when online.", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Failed to save profile offline", Toast.LENGTH_SHORT).show()
             }
-            .addOnFailureListener { e ->
-                nextButton.isEnabled = true
-                nextButton.text = "Save"
-                Toast.makeText(this, "Failed to update profile: ${e.message}", Toast.LENGTH_LONG).show()
-            }
+            nextButton.isEnabled = true
+            nextButton.text = "Save"
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Try to sync unsynced profiles when resuming
+        syncUnsyncedProfiles()
+    }
+
+    private fun syncUnsyncedProfiles() {
+        if (!NetworkUtils.isNetworkAvailable(this)) return
+
+        val unsyncedProfiles = databaseHelper.getUnsyncedProfiles()
+        for (profile in unsyncedProfiles) {
+            firestore.collection("users").document(profile.uid)
+                .set(profile)
+                .addOnSuccessListener {
+                    databaseHelper.markAsSynced(profile.uid)
+                    Log.d("ProfileController", "Profile synced for user: ${profile.uid}")
+                }
+                .addOnFailureListener { e ->
+                    Log.w("ProfileController", "Failed to sync profile for user: ${profile.uid}", e)
+                }
+        }
     }
 }
