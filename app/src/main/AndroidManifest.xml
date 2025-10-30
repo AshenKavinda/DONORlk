@@ -2,6 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Location permissions for getting current location -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.CAMERA" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -12,15 +17,83 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.DONORlk"
         tools:targetApi="31">
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+        <!-- Google Maps API Key -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyBLYt0igljosxuzRfPw-0x866mKXmfYdU8" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-    </application>
 
+        <activity
+            android:name=".controllers.LoginController"
+            android:exported="false" />
+
+        <activity
+            android:name=".controllers.RegistrationController"
+            android:exported="false" />
+
+        <activity
+            android:name=".controllers.ProfileSetupController"
+            android:exported="false" />
+
+        <activity
+            android:name=".controllers.ProfileController"
+            android:exported="false" />
+
+        <activity
+            android:name=".controllers.ForgotPasswordController"
+            android:exported="false" />
+
+        <activity
+            android:name=".controllers.VerificationController"
+            android:exported="false" />
+
+        <activity
+            android:name=".controllers.HomePageController"
+            android:exported="false" />
+
+        <activity
+            android:name=".controllers.DonationHistoryController"
+            android:exported="false" />
+
+        <activity
+            android:name=".controllers.DonationFormController"
+            android:exported="false" />
+        <activity android:name=".CreateAdminActivity" />
+        <activity android:name=".controllers.AdminDashboardController" />
+        <activity
+            android:name=".controllers.AddDonationCenterActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".controllers.SubAdminHomeController"
+            android:exported="false" />
+
+        <activity
+            android:name=".controllers.MakeReservationActivity"
+            android:exported="false" />
+
+        <activity android:name=".CreateOperatorsActivity" />
+        <activity android:name=".controllers.OperatorDashboardController" />
+        <activity android:name=".SaveDonationsRecorderController" />
+        <activity android:name=".controllers.EditAdminActivity" />
+        <activity android:name=".controllers.EditOperatorController" />
+    </application>
 </manifest>
