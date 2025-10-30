@@ -1,20 +1,21 @@
 package com.example.donorlk
 
+import android.content.Intent
 import android.os.Bundle
-import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
+import com.example.donorlk.controllers.HomePageController
+import com.example.donorlk.controllers.LoginController
+import com.example.donorlk.controllers.SubAdminHomeController
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContentView(R.layout.activity_main)
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
-            insets
-        }
+
+        // Start with LoginController
+        val intent = Intent(this, LoginController::class.java)
+        startActivity(intent)
+
+        // Finish MainActivity so user cannot navigate back
+        finish()
     }
 }
